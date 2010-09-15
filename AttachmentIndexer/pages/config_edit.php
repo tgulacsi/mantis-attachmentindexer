@@ -24,20 +24,32 @@ $f_backend = gpc_get_string( 'backend', NULL );
 echo '<pre>old_url='.plugin_config_get( 'url' ).', new_url='.$f_url.'</pre>';
 */
 
-require_once( dirname(__FILE__).'/../core/attachmentindexer_api.php' );
+require_once( dirname(__FILE__).'/../core/indexer_backend_api.php' );
 
 $t_valid_backends = get_valid_backends();
 if( in_array($f_backend, $t_valid_backends) && plugin_config_get( 'backend' ) != $f_backend ) {
 	plugin_config_set( 'backend', $f_backend );
+
+	if( $f_backend == 'xapian' ) {
+		$f_xapian_dbname = gpc_get_string( 'xapian_dbname', NULL );
+		if( $f_xapian_dbname != plugin_config_get( 'xapian_dbname' ) ) {
+			plugin_config_set( 'xapian_dbname', $f_xapian_dbname );
+		}
+	} elseif( $f_backend == 'tsearch2' ) {
+		require_api( 'database_api.php' );
+		$t_attachment_table = plugin_table('bug_file');
+		$t_result = db_query("select count(0) from information_schema.columns
+			where column_name = 'idx' and LOWER(table_name) = LOWER('$t_attachment_table')");
+		$t_db = db_result($t_result);
+		//echo "db=$t_db";
+		if( $t_db == 0 )
+			db_query("ALTER TABLE $t_attachment_table ADD idx tsvector");
+	}
+
 }
 
-$f_xapian_dbname = gpc_get_string( 'xapian_dbname', NULL );
-if( $f_xapian_dbname != plugin_config_get( 'xapian_dbname' ) ) {
-	plugin_config_set( 'xapian_dbname', $f_xapian_dbname );
-}
-
-$f_store_extracted_text = gpc_get_bool( 'store_extracted_text' );
-if( $f_store_extracted_text != plugin_config_get( 'store_extracted_text' ) ) {
+$f_store_extracted_text = gpc_get_bool( 'store_extracted_text', ON );
+if( $f_store_extracted_text != (ON == plugin_config_get( 'store_extracted_text', OFF )) ) {
 	plugin_config_set( 'store_extracted_text', $f_store_extracted_text );
 }
 

@@ -1,5 +1,6 @@
 <?php
-$s_plugin_UnoCustomization_name = 'UnoCustomization';
-$s_plugin_UnoCustomization_config = 'UnoCustomization configuration';
-$s_plugin_UnoCustomization_forbidden_mailaddr_pattern = 'Forbidden mailaddress pattern';
-$s_plugin_UnoCustomization_users_always_get_mail = 'Users who always get mail';
+$s_plugin_AttachmentIndexer_name = 'AttachmentIndexer';
+$s_plugin_AttachmentIndexer_config = 'AttachmentIndexer configuration';
+$s_plugin_AttachmentIndexer_backend = 'index motor';
+$s_plugin_AttachmentIndexer_store_extracted_text = 'Store the extracted text?';
+$s_plugin_AttachmentIndexer_xapian_dbname = 'Xapian database name (path)';

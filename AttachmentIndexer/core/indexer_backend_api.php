@@ -52,7 +52,7 @@ abstract class IndexerBackend {
     }
 
     public function add_text( $p_id, $p_text ) {
-        $t_attachment_table = plugin_table( 'attachment' );
+        $t_attachment_table = plugin_table( 'bug_file' );
         $c_id = db_prepare_int( $p_id );
         $c_text = db_prepare_string( $p_text );
 
@@ -145,7 +145,7 @@ class IndexerXapianBackend extends IndexerBackend {
 
 class IndexerTSearch2Backend extends IndexerBackend {
     protected function index_text( $p_id, $p_text, $p_language=NULL ) {
-        $t_attachment_table = plugin_table( 'attachment' );
+        $t_attachment_table = plugin_table( 'bug_file' );
         $c_id = db_prepare_int( $p_id );
         $c_lang = db_prepare_string( $this->get_lang($p_language) );
 
@@ -157,7 +157,7 @@ class IndexerTSearch2Backend extends IndexerBackend {
 
     public function find_text( $p_query, $p_language=NULL, $p_limit=100 ) {
         $result = array();
-        $t_attachment_table = plugin_table( 'attachment' );
+        $t_attachment_table = plugin_table( 'bug_file' );
         $c_lang = db_prepare_string( $this->get_lang($p_language) );
         $c_query = db_prepare_string( $p_query );
 
@@ -174,7 +174,7 @@ class IndexerTSearch2Backend extends IndexerBackend {
 }
 
 function unindexed_files( $p_limit=100 ) {
-    $t_attachment_table = plugin_table( 'attachment' );
+    $t_attachment_table = plugin_table( 'bug_file' );
     $t_bug_file_table = db_get_table( 'bug_file' );
     $c_limit = db_prepare_int( $p_limit );
 
