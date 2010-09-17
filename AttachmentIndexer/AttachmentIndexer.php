@@ -7,7 +7,7 @@ class AttachmentIndexerPlugin extends MantisPlugin {
         $this->name = 'AttachmentIndexer';
         $this->description = "Attachment indexer using Xapian or PostgreSQL's tsearch2 as backend";
         $this->page = 'config';
-        $this->version = '0.1.1';
+        $this->version = '0.1.2';
         $this->requires = array(
             'MantisCore' => '1.2',
         );
@@ -28,10 +28,13 @@ class AttachmentIndexerPlugin extends MantisPlugin {
 	}
 
     function config() {
+	    require_once( dirname(__FILE__).'/core/indexer_backend_api.php' );
 	    return array(
 		    'backend' => 'tsearch2',
 		    'store_extracted_text' => ON,
-			'xapian_dbname' => NULL,
+		    'xapian_dbname' => NULL,
+		    'extractors' => Extractor::$extractors,
+		    'binaries' => Extractor::$binaries,
 	    );
     }
 

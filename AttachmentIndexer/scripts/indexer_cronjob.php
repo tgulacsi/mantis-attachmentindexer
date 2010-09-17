@@ -14,14 +14,13 @@ $g_plugin_current[0] = 'AttachmentIndexer';
 $conf_pref = 'plugin_AttachmentIndexer_';
 
 try {
-    $indexer = (plugin_config_get( 'backend' ) == 'tsearch2' 
-        ? new IndexerTSearch2Backend() 
-        : new IndexerXapianBackend( config_get( $conf_pref . 'xapian_dbname' )) 
-    );
+    $indexer = get_indexer();
+    print "INDEXER: $indexer\n";
     $indexer->default_laguage = 'hungarian';
-    foreach( unindexed_files($argv > 1 ? (int)($argv[1]) : 10) as $elt ) {
-        echo "indexing $elt...\n";
-        $indexer->add_file( $elt );
+    foreach( unindexed_files($argv > 1 ? (int)($argv[1]) : 100) as $elt ) {
+        echo "indexing {$elt['id']} ({$elt['file_type']})...\n";
+        $indexer->add_file( $elt['id'], $p_file_type=$elt['file_type'],
+            $p_save_to='/tmp' );
         ob_flush();
     }
 } catch (Exception $e) {

@@ -1,4 +1,5 @@
 <?php
+
 if( file_exists(dirname(__FILE__) . '/../../../core.php') ) {
     require_once( dirname(__FILE__) . '/../../../core.php' );
 } else {
@@ -10,65 +11,189 @@ require_api( 'database_api.php' );
 require_api( 'file_api.php' );
 require_api( 'plugin_api.php' );
 
-abstract class IndexerBackend {
-    public static $known_types = array(
-        'text/plain' => 'extract_text_plain',
-        'text/html' => 'extract_text_html',
-        'text/xml' => 'extract_xml',
-        'application/pdf' => 'extract_pdf',
-        'application/msword' => 'extract_msword',
-        'application/vnd.ms-word' => 'extract_msword',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => 'extract_docx',
-        'application/vnd.oasis.opendocument.text' => 'extract_odt',
+class Extractor {
+    public static $binaries = array(
+        'antiword' => 'antiword',
+        'unzip' => 'unzip',
+        'pdftotext' => 'pdftotext',
+        'java' => 'java',
     );
+    public static $mimetypes = array(
+        'text/plain' => 'text',
+        'text/html' => 'html',
+        'text/xml' => 'xml',
+        'application/pdf' => 'pdf',
+        'application/msword' => 'msword',
+        'application/vnd.ms-word' => 'msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => 'docx',
+        'application/vnd.oasis.opendocument.text' => 'odt',
+    );
+    public static $extractor_possibilities = array(
+        'tika' => array('msword', 'pdf', 'odt', 'docx'),
+        'antiword' => array('msword'),
+        'pdftotext' => array('pdf'),
+        'xml' => array('html', 'xml'),
+        'text' => array('text')
+    );
+
+    public static $extractors = array(
+        'msword' => 'tika', 'pdf' => 'tika', 'odt' => 'tika', 'docx' => 'tika'
+    );
+
+    function __construct() {
+        $args = func_get_args();
+        if( $args[0] )
+            $this->extractors = $args[0];
+    }
+
+    function get_extractor( $p_type ) {
+        $typ = Extractor::$mimetypes[$p_type];
+        $x = Extractor::$extractors[$typ];
+        //print "$p_type -> {$typ} -> {$x}\n";
+        return $x;
+    }
+
+    function __call( $p_type, $p_data ) {
+        return $this->extract( $p_type, $p_data );
+    }
+
+    function extract( $p_type, $p_data ) {
+        $t_extractor = 'extract_' . $this->get_extractor($p_type);
+        //print "t_extractor=$t_extractor\n";
+        return $this->$t_extractor( $p_data );
+    }
+
+    public function set_extractor($p_type, $p_extractor) {
+        $this->extractors[$p_type] = $p_extractor;
+    }
+
+    protected function execute( $p_prog, $p_cmd, $input, $env=array() ) {
+        $result = NULL;
+        $descriptorspec = array(
+            0 => array('pipe', 'r'),
+            1 => array('pipe', 'w'),
+            2 => array('file', '/tmp/attachmentindexer-execute-error.txt', 'a')
+        );
+        setlocale(LC_ALL, 'en_US.UTF-8');
+        setlocale(LC_CTYPE, 'en_US.UTF-8');
+
+        $cmd = (array_key_exists($p_prog, Extractor::$binaries)
+            ? Extractor::$binaries[$p_prog] : $p_prog) . ' ' . $p_cmd;
+        print "\n  EXECUTING $cmd\n";
+
+        $fh = proc_open( $cmd, $descriptorspec, $pipes, '/tmp' );
+        if (is_resource($fh) ) {
+            fwrite($pipes[0], $input);
+            //print_r($input);
+            fclose($pipes[0]);
+            $result = stream_get_contents($pipes[1]);
+            fclose($pipes[1]);
+        }
+        return array(proc_close($fh), $result);
+    }
+
+    public static function extract_xml( $p_data ) {
+        $xml = DOMDocument::loadXML($p_data,
+            LIBXML_NOENT | LIBXML_XINCLUDE | LIBXML_NOERROR | LIBXML_NOWARNING);
+        // Return data without XML formatting tags
+        return array(0, strip_tags($xml->saveXML()));
+    }
+
+    public static function extract_html( $p_data ) {
+        return array(0, strip_tags($p_data));
+    }
+
+    public static function extract_text( $p_data ) {
+        return array(0, $p_data);
+    }
+
+    public function extract_zipxml( $p_data, $p_filename ) {
+        $result = $this->execute('unzip',  '-p - ' . escapeshellarg( $p_filename ), $p_data);
+        if( $result[0] === 0 ) {
+            $result = Extractor::extract_xml( $result[1] );
+        }
+        return $result;
+    }
+
+    public function extract_odt( $p_data ) {
+        return $this->extract_zipxml( $p_data, 'content.xml');
+    }
+
+    public function extract_docx( $p_data ) {
+        return $this->extract_zipxml( $p_data, 'word/document.xml');
+    }
+
+    public function extract_msword( $p_data ) {
+        return $this->execute( 'antiword', '-t -i1 - | grep -v [pic]', $p_data,
+            array('LC_ALL' => 'en_US.UTF-8'));
+    }
+
+    public function extract_pdf( $p_data ) {
+        $tmpfn = tempnam( '/tmp', 'pdf' );
+        file_put_contents( $tmpfn, $p_data );
+        try {
+            $result = $this->execute( 'pdftotext', '-enc UTF-8 "' . $tmpfn . '" -', NULL );
+        } catch(Exception $e) {
+            $result = array(-1, $e);
+        }
+        unlink($tmpfn);
+        return $result;
+    }
+
+    public function extract_tika( $p_data ) {
+        return $this->execute('java', '-jar '.dirname(__FILE__).'/../tika-app-0.7.jar -eUTF-8 -t -', $p_data);
+    }
+}
+
+abstract class IndexerBackend {
+    public $extractor = NULL;
     public $default_language = 'english';
 
-    public function add_file( $p_file_id ) {
+    public function add_file( $p_file_id, $p_file_type=NULL, $p_save_to=NULL ) {
         //print "\nadd_file($p_file_id): ";
         $result = file_get_content( $p_file_id, 'bug' );
         //print $result['type'] . "\n";
-        $t_extractor = $this->get_extractor( $result['type'] );
+        if( $this->extractor == NULL ) {
+            $t_extractors = plugin_config_get( 'extractors', NULL );
+            $this->extractor = new Extractor($t_extractors);
+        }
+        if( $p_file_type == NULL ) {
+            if( !array_key_exists( $result['content'], Extractor::$mimetypes ) ) {
+                $rset = db_query_bound(
+                    'SELECT file_type FROM '.db_get_table('bug_file').'
+                       WHERE id='.db_param(),
+                    array( $p_file_id ) );
+                $row = db_fetch_array( $rset );
+                $t_type = $row['file_type'];
+            } else {
+                $t_type = $result['content'];
+            }
+        } else {
+            $t_type = $p_file_type;
+        }
+        $t_extractor = $this->extractor->get_extractor( $t_type );
         if ( $t_extractor != NULL ) {
             //print '  '.strlen($result['content'])."\n";
-            file_put_contents("/tmp/$p_file_id", $result['content'] );
-            $result = $t_extractor( $result['content'] );
+            if( $p_save_to !== NULL ) {
+                file_put_contents("/tmp/$p_file_id", $result['content'] );
+            }
+            $result = $this->extractor->extract( $t_type, $result['content'] );
             //print "  "; print_r($result); print "\n";
             if ( $result[0] === 0 ) {
                 //print_r($result);
                 $text = $result[1] == NULL ? NULL : trim($result[1]);
-                if( strpos($text, "\xc1") )
-                    $text = iconv('ISO-8859-2', 'UTF-8', $text);
+                if( !mb_check_encoding($text, 'UTF-8') ) {
+                    $text = mb_convert_encoding($text, 'UTF-8',
+                        array('ASCII', 'ISO-8859-2', 'ISO-8859-1', 'CP1252', 'CP1251'));
+                }
                 $this->add_text( $p_file_id, $text );
             }
         }
     }
 
-    public function get_extractor( $p_type ) {
-        $t_key = NULL;
-        //print "\nknown_types:"; print_r($this::$known_types); print "\n";
-        $p = strpos($p_type, ';');
-        $t_type = $p ? substr($p_type, 0, $p) : $p_type;
-        //print "$p_type -> $t_type\n";
-        
-        if( array_key_exists( $t_type, $this::$known_types ) ) {
-            $t_key = $t_type;
-        } else {
-            $t_arr = explode( '/', $t_type, 1 );
-            //print_r($t_arr);
-            if( array_key_exists( $t_arr[0], $this::$known_types ) ) {
-                $t_key = $t_arr[0];
-            }
-        }
-        if( $t_key !== NULL && array_key_exists( $t_key, $this::$known_types ) ) {
-            return $this::$known_types[ $t_key ];
-        } else {
-            return NULL;
-        }
-    }
-
     public function add_text( $p_id, $p_text ) {
         db_query('BEGIN');
-        
+
         $t_attachment_table = plugin_table( 'bug_file' );
         $c_id = db_prepare_int( $p_id );
 
@@ -83,7 +208,7 @@ abstract class IndexerBackend {
         }
 
         $this->index_text( $p_id, $p_text );
-        
+
         db_query('COMMIT');
     }
 
@@ -175,7 +300,7 @@ class IndexerTSearch2Backend extends IndexerBackend {
 
         $query = "UPDATE $t_attachment_table
                     SET idx = to_tsvector('$c_lang', text)
-                    WHERE text IS NOT NULL AND 
+                    WHERE text IS NOT NULL AND
                           (file_id = $c_id OR idx IS NULL)";
         db_query( $query );
     }
@@ -184,15 +309,16 @@ class IndexerTSearch2Backend extends IndexerBackend {
         $result = array();
         $t_attachment_table = plugin_table( 'bug_file' );
         $c_lang = db_prepare_string( $this->get_lang($p_language) );
-        $c_query = db_prepare_string( $p_query );
 
         $query = "SELECT file_id FROM $t_attachment_table
-                    WHERE idx @@ to_tsquery('$c_lang', '$c_query')";
-        $t_result = db_query( $query, $p_limit );
-        $n = db_num_rows( $t_result );
-        for( $i = 0;$i < $n;$i++ ) {
+                    WHERE idx @@ to_tsquery('$c_lang', ".db_param().")";
+        $t_result = db_query_bound( $query, array( $p_query ), $p_limit );
+        while( !$t_result->EOF ) {
             $row = db_fetch_array( $t_result );
-            $result[] = $row[0];
+            //print_r($row);
+            if( $row === false )
+                break;
+            $result[] = $row['file_id'];
         }
         return $result;
     }
@@ -203,13 +329,14 @@ function unindexed_files( $p_limit=100 ) {
     $t_bug_file_table = db_get_table( 'bug_file' );
     $c_limit = db_prepare_int( $p_limit );
 
-    $query = "SELECT A.id FROM $t_bug_file_table AS A
+    $query = "SELECT A.id, A.file_type FROM $t_bug_file_table AS A
                 WHERE NOT EXISTS (SELECT 1 FROM $t_attachment_table AS X
                                     WHERE X.file_id = A.id) AND
                       A.file_type IS NOT NULL AND
+                      A.file_type NOT IN ('application/x-empty', 'application/zip') AND
                       (";
     $t_likes = array();
-    foreach( array_keys(IndexerBackend::$known_types) as $key ) {
+    foreach( array_keys(Extractor::$mimetypes) as $key ) {
         $t_likes[] = "A.file_type LIKE '" . db_prepare_string( $key ) . "%'";
     }
     $query .= implode(' OR ', $t_likes) . ')';
@@ -218,10 +345,9 @@ function unindexed_files( $p_limit=100 ) {
     $t_result = db_query( $query, $p_limit );
     while( !$t_result->EOF ) {
 		$row = db_fetch_array( $t_result );
-        //print_r($row);
-        if( $row === false ) 
+        if( $row === false )
             break;
-        $result[] = $row['id'];
+        $result[] = $row;
     }
     //print_r($result);
     return $result;
@@ -235,61 +361,14 @@ function get_valid_backends() {
     return $t_valid_backends;
 }
 
-function execute( $cmd, $input, $env=array() ) {
-    $result = NULL;
-    $descriptorspec = array(
-        0 => array('pipe', 'r'),
-        1 => array('pipe', 'w'),
-        2 => array('file', '/tmp/attachmentindexer-execute-error.txt', 'a')
+function get_indexer( $p_backend=NULL ) {
+    $t_backend = $p_backend == NULL ? plugin_config_get( 'backend' ) : $p_backend;
+    $t_valid_backends = get_valid_backends();
+    if( $t_backend == NULL || !in_array( $t_backend, $t_valid_backends ) )
+        $t_backend = $t_valid_backends[0];
+    //print "backend=$t_backend\n";
+    return ($t_backend == 'xapian'
+        ? new IndexerXapianBackend( plugin_config_get( 'xapian_dbname' ))
+        : new IndexerTSearch2Backend()
     );
-    print "\n  EXECUTING $cmd\n";
-    $fh = proc_open( $cmd, $descriptorspec, $pipes, '/tmp' );
-    if (is_resource($fh) ) {
-        fwrite($pipes[0], $input);
-        //print_r($input);
-        fclose($pipes[0]);
-        $result = stream_get_contents($pipes[1]);
-        fclose($pipes[1]);
-    }
-    return array(proc_close($fh), $result);
-}
-
-function extract_xml( $p_data ) {
-    $xml = DOMDocument::loadXML($p_data,
-        LIBXML_NOENT | LIBXML_XINCLUDE | LIBXML_NOERROR | LIBXML_NOWARNING);
-    // Return data without XML formatting tags
-    return array(0, strip_tags($xml->saveXML()));
-}
-
-function extract_text_html( $p_data ) {
-    return array(0, strip_tags($p_data));
-}
-
-function extract_text_plain( $p_data ) {
-    return array(0, $p_data);
-}
-
-function extract_zipxml( $p_data, $p_filename ) {
-    $result = execute('unzip -p - ' . escapeshellarg( $p_filename ), $p_data);
-    if( $result[0] === 0 ) {
-        $result = extract_xml( $result[1] );
-    }
-    return $result;
-}
-
-function extract_odt( $p_data ) {
-    return extract_zipxml( $p_data, 'content.xml');
-}
-
-function extract_docx( $p_data ) {
-    return extract_zipxml( $p_data, 'word/document.xml');
-}
-
-function extract_msword( $p_data ) {
-    return execute( 'antiword -t -i1 - | grep -v [pic]', $p_data, 
-        array('LC_ALL=en_US.UTF-8'));
-}
-
-function extract_pdf( $p_data ) {
-    return execute('pdftotext -enc UTF-8 - -', $p_data);
 }
