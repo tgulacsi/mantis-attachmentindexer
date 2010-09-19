@@ -1,6 +1,6 @@
 <?php
-require_once( 'indexer_backend_api.php' );
-require_class( 'MantisFilter.class.php' );
+require_once( config_get( 'class_path' ) . 'MantisPlugin.class.php' );
+
 
 class IndexerFilter extends MantisFilter {
 
@@ -41,7 +41,16 @@ class IndexerFilter extends MantisFilter {
 	 * @return array Keyed-array with query elements; see developer guide
 	 */
 	function query( $p_filter_input ) {
-		result = array();
+		require_once( 'indexer_backend_api.php' );
+		require_api( 'logging_api.php' );
+		require_api( 'plugin_api.php' );
+		//WHY IS THIS NEEDED????
+		global $g_plugin_current;
+		if( !isset($g_plugin_current[0]) )
+			$g_plugin_current[0] = 'AttachmentIndexer';
+		log_event(LOG_FILTERING, "query($p_filter_input) ".var_export($g_plugin_current, true));
+		
+		$result = array();
 		$indexer = get_indexer();
 		$t_file_ids = $indexer->find_text( $p_filter_input );
 
@@ -49,10 +58,16 @@ class IndexerFilter extends MantisFilter {
 		$t_bug_table = db_get_table( 'bug' );
 		$t_file_table = db_get_table( 'bug_file' );
 		$result = array(
-			'where' => array( "( $t_bug_table.id IN ( SELECT bug_id FROM $t_file_table WHERE id IN (" . implode(',', $t_file_ids) . ") ) )" ),
+			'where' => (count($t_file_ids) > 0 
+				? 
+				"( $t_bug_table.id IN ( SELECT bug_id FROM $t_file_table WHERE id IN (" 
+				. implode(',', $t_file_ids) . ") ) )"
+				:
+				'1=0'
+				),
 		);
-        return $result;
-    }
+		return $result;
+	}
 
 	/**
 	 * Display the current value of the filter field.
@@ -60,8 +75,10 @@ class IndexerFilter extends MantisFilter {
 	 * @return string Current value output
 	 */
 	function display( $p_filter_value ) {
-        return $p_filter_value;
-    }
+		require_api( 'logging_api.php' );
+		log_event(LOG_FILTERING, "display($p_filter_value)");
+		return $p_filter_value;
+	}
 
 	/**
 	 * For list type filters, define a keyed-array of possible
@@ -69,7 +86,9 @@ class IndexerFilter extends MantisFilter {
 	 * @return array Filter options keyed by value=>display
 	 */
 	function options() {
-        return array();
-    }
+		require_api( 'logging_api.php' );
+		log_event(LOG_FILTERING, "options()");
+		return array();
+	}
 }
 

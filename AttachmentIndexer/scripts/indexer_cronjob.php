@@ -8,16 +8,15 @@ if (php_sapi_name() != "cli") {
 
 require_once( dirname(__FILE__) . '/../core/indexer_backend_api.php' );
 //require_once( 'core.php' );
-global $g_plugin_current;
-$g_plugin_current[0] = 'AttachmentIndexer';
 
-$conf_pref = 'plugin_AttachmentIndexer_';
+//$conf_pref = 'plugin_AttachmentIndexer_';
 
 try {
     $indexer = get_indexer();
-    print "INDEXER: $indexer\n";
+    //print "INDEXER: $indexer\n"; print_r($indexer);
     $indexer->default_laguage = 'hungarian';
-    foreach( unindexed_files($argv > 1 ? (int)($argv[1]) : 100) as $elt ) {
+    //print_r(unindexed_files(10));
+    foreach( unindexed_files($argc > 1 ? (int)($argv[1]) : 100) as $elt ) {
         echo "indexing {$elt['id']} ({$elt['file_type']})...\n";
         $indexer->add_file( $elt['id'], $p_file_type=$elt['file_type'],
             $p_save_to='/tmp' );

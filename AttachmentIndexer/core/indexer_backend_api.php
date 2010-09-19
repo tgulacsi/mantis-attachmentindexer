@@ -11,6 +11,10 @@ require_api( 'database_api.php' );
 require_api( 'file_api.php' );
 require_api( 'plugin_api.php' );
 
+global $g_plugin_current;
+if( !isset($g_plugin_current[0]) )
+    $g_plugin_current[0] = 'AttachmentIndexer';
+
 class Extractor {
     public static $binaries = array(
         'antiword' => 'antiword',
@@ -192,6 +196,7 @@ abstract class IndexerBackend {
     }
 
     public function add_text( $p_id, $p_text ) {
+        $t_store_text = (int)(plugin_config_get( 'store_backend_text', ON ));
         db_query('BEGIN');
 
         $t_attachment_table = plugin_table( 'bug_file' );
@@ -208,6 +213,9 @@ abstract class IndexerBackend {
         }
 
         $this->index_text( $p_id, $p_text );
+        if( ON != $t_store_text ) {
+            db_query( "UPDATE $t_attachment_table SET text = NULL WHERE file_id = $c_id" );
+        }
 
         db_query('COMMIT');
     }
@@ -363,6 +371,7 @@ function get_valid_backends() {
 
 function get_indexer( $p_backend=NULL ) {
     $t_backend = $p_backend == NULL ? plugin_config_get( 'backend' ) : $p_backend;
+    //print "\$t_backend=$t_backend\n";
     $t_valid_backends = get_valid_backends();
     if( $t_backend == NULL || !in_array( $t_backend, $t_valid_backends ) )
         $t_backend = $t_valid_backends[0];

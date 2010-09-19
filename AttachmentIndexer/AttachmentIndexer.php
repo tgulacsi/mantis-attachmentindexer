@@ -28,7 +28,7 @@ class AttachmentIndexerPlugin extends MantisPlugin {
 	}
 
     function config() {
-	    require_once( dirname(__FILE__).'/core/indexer_backend_api.php' );
+	    require_once( dirname(__FILE__) . '/core/indexer_backend_api.php' );
 	    return array(
 		    'backend' => 'tsearch2',
 		    'store_extracted_text' => ON,
@@ -39,15 +39,28 @@ class AttachmentIndexerPlugin extends MantisPlugin {
     }
 
     function hooks() {
-	    $res = array(
+	    return array(
 		    'EVENT_MENU_MANAGE' => 'manage',
-		    //'EVENT_MENU_FILTER' => 'filter_link',
-		'EVENT_FILTER_FIELDS' => 'filter_field_classes',
+		    'EVENT_MENU_FILTER' => 'filter_link',
+            'EVENT_FILTER_FIELDS' => 'filter_field_classes',
+            'EVENT_FILTER_COLUMNS' => 'filter_field_columns',
 		);
+    }
+    
+    function filter_link() {
+        log_event( LOG_FILTERING, 'AI.filter_link' );
+        return '???';
+    }
+    
+    function filter_field_columns() {
+        log_event( LOG_FILTERING, 'AI.filter_field_columns' );
+        return array();
     }
 
     function filter_field_classes( ) {
-        return array( 'IndexFilter' ); //class names for custom filters extending MantisFilter
+        log_event( LOG_FILTERING, 'AI.filter_field_classes' );
+	    require_once( dirname(__FILE__) . '/core/IndexerFilter.class.php' );
+        return array( 'IndexerFilter' ); //class names for custom filters extending MantisFilter
     }
 
     function manage( ) {
