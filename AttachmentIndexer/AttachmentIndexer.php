@@ -47,7 +47,7 @@ class AttachmentIndexerPlugin extends MantisPlugin {
     }
 
     function filter_field_classes( ) {
-        return array( ); //class names for custom filters extending MantisFilter
+        return array( 'IndexFilter' ); //class names for custom filters extending MantisFilter
     }
 
     function manage( ) {

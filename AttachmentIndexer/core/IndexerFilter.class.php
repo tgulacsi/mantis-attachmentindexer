@@ -41,7 +41,16 @@ class IndexerFilter extends MantisFilter {
 	 * @return array Keyed-array with query elements; see developer guide
 	 */
 	function query( $p_filter_input ) {
-        $result = array();
+		result = array();
+		$indexer = get_indexer();
+		$t_file_ids = $indexer->find_text( $p_filter_input );
+
+		$t_attachment_table = plugin_table( 'bug_file' );
+		$t_bug_table = db_get_table( 'bug' );
+		$t_file_table = db_get_table( 'bug_file' );
+		$result = array(
+			'where' => array( "( $t_bug_table.id IN ( SELECT bug_id FROM $t_file_table WHERE id IN (" . implode(',', $t_file_ids) . ") ) )" ),
+		);
         return $result;
     }
 
