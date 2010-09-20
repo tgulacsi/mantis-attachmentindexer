@@ -1,8 +1,9 @@
 <?php
 require_once( config_get( 'class_path' ) . 'MantisPlugin.class.php' );
 
+class AttachmentFilter extends MantisFilter {
 
-class IndexerFilter extends MantisFilter {
+	public static $cache = NULL;
 
 	/**
 	 * Field name, as used in the form element and processing.
@@ -49,7 +50,7 @@ class IndexerFilter extends MantisFilter {
 		if( !isset($g_plugin_current[0]) )
 			$g_plugin_current[0] = 'AttachmentIndexer';
 		log_event(LOG_FILTERING, "query($p_filter_input) ".var_export($g_plugin_current, true));
-		
+
 		$result = array();
 		$indexer = get_indexer();
 		$t_file_ids = $indexer->find_text( $p_filter_input );
@@ -58,14 +59,16 @@ class IndexerFilter extends MantisFilter {
 		$t_bug_table = db_get_table( 'bug' );
 		$t_file_table = db_get_table( 'bug_file' );
 		$result = array(
-			'where' => (count($t_file_ids) > 0 
-				? 
-				"( $t_bug_table.id IN ( SELECT bug_id FROM $t_file_table WHERE id IN (" 
+			'where' => (count($t_file_ids) > 0
+				?
+				"( $t_bug_table.id IN ( SELECT bug_id FROM $t_file_table WHERE id IN ("
 				. implode(',', $t_file_ids) . ") ) )"
 				:
 				'1=0'
 				),
 		);
+		AttachmentFilter::$cache = $t_file_ids;
+
 		return $result;
 	}
 

@@ -41,26 +41,27 @@ class AttachmentIndexerPlugin extends MantisPlugin {
     function hooks() {
 	    return array(
 		    'EVENT_MENU_MANAGE' => 'manage',
-		    'EVENT_MENU_FILTER' => 'filter_link',
+		    //'EVENT_MENU_FILTER' => 'filter_link',
             'EVENT_FILTER_FIELDS' => 'filter_field_classes',
-            'EVENT_FILTER_COLUMNS' => 'filter_field_columns',
+            //'EVENT_FILTER_COLUMNS' => 'filter_field_columns',
 		);
     }
-    
+
     function filter_link() {
-        log_event( LOG_FILTERING, 'AI.filter_link' );
+        //log_event( LOG_FILTERING, 'AI.filter_link' );
         return '???';
     }
-    
+
     function filter_field_columns() {
-        log_event( LOG_FILTERING, 'AI.filter_field_columns' );
-        return array();
+        //log_event( LOG_FILTERING, 'AI.filter_field_columns' );
+	    require_once( dirname(__FILE__) . '/core/AttachmentColumn.class.php' );
+        return array('AttachmentColumn' );
     }
 
     function filter_field_classes( ) {
-        log_event( LOG_FILTERING, 'AI.filter_field_classes' );
-	    require_once( dirname(__FILE__) . '/core/IndexerFilter.class.php' );
-        return array( 'IndexerFilter' ); //class names for custom filters extending MantisFilter
+        //log_event( LOG_FILTERING, 'AI.filter_field_classes' );
+	    require_once( dirname(__FILE__) . '/core/AttachmentFilter.class.php' );
+        return array( 'AttachmentFilter' ); //class names for custom filters extending MantisFilter
     }
 
     function manage( ) {

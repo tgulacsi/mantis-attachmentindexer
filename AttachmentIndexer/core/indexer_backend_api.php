@@ -41,7 +41,8 @@ class Extractor {
     );
 
     public static $extractors = array(
-        'msword' => 'tika', 'pdf' => 'tika', 'odt' => 'tika', 'docx' => 'tika'
+        'msword' => 'tika', 'pdf' => 'tika', 'odt' => 'tika', 'docx' => 'tika',
+        //'xml' => 'tika', 'text' => 'tika', 'html' => 'tika',
     );
 
     function __construct() {
@@ -52,7 +53,8 @@ class Extractor {
 
     function get_extractor( $p_type ) {
         $typ = Extractor::$mimetypes[$p_type];
-        $x = Extractor::$extractors[$typ];
+        $x = (isset(Extractor::$extractors[$typ])
+            ? Extractor::$extractors[$typ] : $typ);
         //print "$p_type -> {$typ} -> {$x}\n";
         return $x;
     }
@@ -62,6 +64,9 @@ class Extractor {
     }
 
     function extract( $p_type, $p_data ) {
+        //print 'data='.var_export($p_data, true)."\n";
+        if( $p_data == NULL || strlen($p_data) == 0 )
+            return array(0, NULL);
         $t_extractor = 'extract_' . $this->get_extractor($p_type);
         //print "t_extractor=$t_extractor\n";
         return $this->$t_extractor( $p_data );
@@ -176,6 +181,7 @@ abstract class IndexerBackend {
             $t_type = $p_file_type;
         }
         $t_extractor = $this->extractor->get_extractor( $t_type );
+        //print '  extractor='.var_export($t_extractor, true)."\n";
         if ( $t_extractor != NULL ) {
             //print '  '.strlen($result['content'])."\n";
             if( $p_save_to !== NULL ) {
@@ -186,9 +192,11 @@ abstract class IndexerBackend {
             if ( $result[0] === 0 ) {
                 //print_r($result);
                 $text = $result[1] == NULL ? NULL : trim($result[1]);
-                if( !mb_check_encoding($text, 'UTF-8') ) {
-                    $text = mb_convert_encoding($text, 'UTF-8',
-                        array('ASCII', 'ISO-8859-2', 'ISO-8859-1', 'CP1252', 'CP1251'));
+                if( $text != NULL && strlen($text) > 0 ) {
+                    if( !mb_check_encoding($text, 'UTF-8') ) {
+                        $text = mb_convert_encoding($text, 'UTF-8',
+                            array('ASCII', 'ISO-8859-2', 'ISO-8859-1', 'CP1252', 'CP1251'));
+                    }
                 }
                 $this->add_text( $p_file_id, $text );
             }
@@ -307,7 +315,7 @@ class IndexerTSearch2Backend extends IndexerBackend {
         $c_lang = db_prepare_string( $this->get_lang($p_language) );
 
         $query = "UPDATE $t_attachment_table
-                    SET idx = to_tsvector('$c_lang', text)
+                    SET idx = strip(to_tsvector('$c_lang', SUBSTRING(text, 1, 1024*1024)))
                     WHERE text IS NOT NULL AND
                           (file_id = $c_id OR idx IS NULL)";
         db_query( $query );

@@ -18,8 +18,9 @@ try {
     //print_r(unindexed_files(10));
     foreach( unindexed_files($argc > 1 ? (int)($argv[1]) : 100) as $elt ) {
         echo "indexing {$elt['id']} ({$elt['file_type']})...\n";
-        $indexer->add_file( $elt['id'], $p_file_type=$elt['file_type'],
-            $p_save_to='/tmp' );
+        $indexer->add_file( $elt['id'], $p_file_type=$elt['file_type']
+            //$p_save_to='/tmp'
+            );
         ob_flush();
     }
 } catch (Exception $e) {
