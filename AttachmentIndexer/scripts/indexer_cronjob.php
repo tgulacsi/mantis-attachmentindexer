@@ -12,6 +12,9 @@ require_once( dirname(__FILE__) . '/../core/indexer_backend_api.php' );
 //$conf_pref = 'plugin_AttachmentIndexer_';
 
 try {
+    if( function_exists( 'proc_nice' ) )
+        proc_nice(15);
+
     $indexer = get_indexer();
     //print "INDEXER: $indexer\n"; print_r($indexer);
     $indexer->default_laguage = 'hungarian';

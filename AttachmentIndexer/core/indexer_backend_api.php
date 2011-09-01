@@ -1,4 +1,5 @@
 <?php
+// vim: set et tabstop=4
 
 if( file_exists(dirname(__FILE__) . '/../../../core.php') ) {
     require_once( dirname(__FILE__) . '/../../../core.php' );
@@ -86,6 +87,7 @@ class Extractor {
         setlocale(LC_ALL, 'en_US.UTF-8');
         setlocale(LC_CTYPE, 'en_US.UTF-8');
 
+        print 'input length: '.strlen($input);
         $cmd = (array_key_exists($p_prog, Extractor::$binaries)
             ? Extractor::$binaries[$p_prog] : $p_prog) . ' ' . $p_cmd;
         print "\n  EXECUTING $cmd\n";
@@ -150,7 +152,8 @@ class Extractor {
     }
 
     public function extract_tika( $p_data ) {
-        return $this->execute('java', '-jar '.dirname(__FILE__).'/../tika-app-0.7.jar -eUTF-8 -t -', $p_data);
+        //print 'p_data length: '.strlen($p_data);
+        return $this->execute('java', '-jar '.dirname(__FILE__).'/../tika-app.jar -eUTF-8 -t -', $p_data);
     }
 }
 
@@ -160,14 +163,14 @@ abstract class IndexerBackend {
 
     public function add_file( $p_file_id, $p_file_type=NULL, $p_save_to=NULL ) {
         //print "\nadd_file($p_file_id): ";
-        $result = file_get_content( $p_file_id, 'bug' );
-        //print $result['type'] . "\n";
+        $content = get_file_content( $p_file_id, 'bug' );
+        print "\ncontent length=".strlen($content)."\n";
         if( $this->extractor == NULL ) {
             $t_extractors = plugin_config_get( 'extractors', NULL );
             $this->extractor = new Extractor($t_extractors);
         }
         if( $p_file_type == NULL ) {
-            if( !array_key_exists( $result['content'], Extractor::$mimetypes ) ) {
+            if( !array_key_exists( $content, Extractor::$mimetypes ) ) {
                 $rset = db_query_bound(
                     'SELECT file_type FROM '.db_get_table('bug_file').'
                        WHERE id='.db_param(),
@@ -175,7 +178,7 @@ abstract class IndexerBackend {
                 $row = db_fetch_array( $rset );
                 $t_type = $row['file_type'];
             } else {
-                $t_type = $result['content'];
+                $t_type = $content;
             }
         } else {
             $t_type = $p_file_type;
@@ -183,11 +186,10 @@ abstract class IndexerBackend {
         $t_extractor = $this->extractor->get_extractor( $t_type );
         //print '  extractor='.var_export($t_extractor, true)."\n";
         if ( $t_extractor != NULL ) {
-            //print '  '.strlen($result['content'])."\n";
             if( $p_save_to !== NULL ) {
-                file_put_contents("/tmp/$p_file_id", $result['content'] );
+                file_put_contents("/tmp/$p_file_id", $content );
             }
-            $result = $this->extractor->extract( $t_type, $result['content'] );
+            $result = $this->extractor->extract( $t_type, $content );
             //print "  "; print_r($result); print "\n";
             if ( $result[0] === 0 ) {
                 //print_r($result);
@@ -309,12 +311,28 @@ class IndexerXapianBackend extends IndexerBackend {
 }
 
 class IndexerTSearch2Backend extends IndexerBackend {
+    public function __construct() {
+        $this->attachment_table = plugin_table( 'bug_file' );
+        $v_db = 0;
+        $t_result = db_query( "SELECT COUNT(1) db FROM information_schema.columns 
+  WHERE column_name = 'idx' AND table_name = LOWER('$this->attachment_table')", 1);
+
+        $row = db_fetch_array( $t_result );
+        //echo "\n row: "; print_r($row);
+        if( $row !== false )
+            $v_db = $row['db'];
+        if( $v_db == 0 ) {
+            //print 'SQL: '.$t_result->sql;
+            db_query( "ALTER TABLE $this->attachment_table ADD COLUMN idx tsvector" );
+        }
+    }
+
     protected function index_text( $p_id, $p_text, $p_language=NULL ) {
-        $t_attachment_table = plugin_table( 'bug_file' );
+        #$t_attachment_table = plugin_table( 'bug_file' );
         $c_id = db_prepare_int( $p_id );
         $c_lang = db_prepare_string( $this->get_lang($p_language) );
 
-        $query = "UPDATE $t_attachment_table
+        $query = "UPDATE $this->attachment_table
                     SET idx = strip(to_tsvector('$c_lang', SUBSTRING(text, 1, 1024*1024)))
                     WHERE text IS NOT NULL AND
                           (file_id = $c_id OR idx IS NULL)";
@@ -360,12 +378,32 @@ function unindexed_files( $p_limit=100 ) {
     $result = array();
     $t_result = db_query( $query, $p_limit );
     while( !$t_result->EOF ) {
-		$row = db_fetch_array( $t_result );
+        $row = db_fetch_array( $t_result );
         if( $row === false )
             break;
         $result[] = $row;
     }
     //print_r($result);
+    return $result;
+}
+
+function get_file_content( $p_file_id, $p_type='bug' ) {
+    $t_bug_file_table = db_get_table( 'bug_file' );
+    $t_id = db_prepare_int( $p_file_id );
+
+    $query = "SELECT A.content FROM $t_bug_file_table AS A
+                WHERE A.id = $t_id";
+    //print $query . "\n";
+    $result = null;
+    $t_result = db_query( $query, 1 );
+    while( !$t_result->EOF ) {
+        $row = db_fetch_array( $t_result );
+        if( $row === false )
+            break;
+        $result = $row['content'];
+    }
+    //print_r($result);
+    //print "\n result length=".strlen($result)."\n";
     return $result;
 }
 
